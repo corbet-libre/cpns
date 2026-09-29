@@ -1,0 +1,23 @@
+[package]
+name = "cpns"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+description = "Pins: sealed fingerprints of restricted profile fields"
+license = "LGPL-3.0-only WITH LGPL-3.0-linking-exception"
+repository = "https://github.com/corbet-foss/cpns"
+readme = "README.md"
+publish = false
+include = ["Cargo.toml", "src/**", "docs/**", "README.md", "LICENSE", "LICENSE.md", "LICENSES/LGPL-3.0-only.txt", "LICENSES/LGPL-3.0-linking-exception.txt", "LICENSES/GPL-3.0-only.txt"]
+
+[dependencies]
+sha2 = "0.11"
+subtle = "2.6"
+zeroize = "1.9"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+getrandom = "0.4"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
