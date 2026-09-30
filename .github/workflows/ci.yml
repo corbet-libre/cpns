@@ -3,7 +3,7 @@ name: ci
 on:
   push:
     branches: ["**"]
-    paths-ignore: ["**.md", "LICENSE", "LICENSES/**"]
+    paths-ignore: ["docs/**", "AGENTS.md", "LICENSE", "LICENSE.md", "LICENSES/**"]
   pull_request:
 
 concurrency:
@@ -21,14 +21,42 @@ jobs:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
       - run: rustc --version
-      - run: cargo generate-lockfile
+      - run: cargo metadata --locked --all-features --format-version 1 > dependency-metadata.json
       - run: cargo fmt --all --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
+      - run: cargo test --locked --no-default-features
       - run: cargo check --locked --target wasm32-unknown-unknown
+      - run: cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test openings -- -D warnings
+      - name: Install the matching Wasm test runner
+        shell: bash
+        run: |
+          version=$(jq -r '.packages[] | select(.name == "wasm-bindgen") | .version' dependency-metadata.json)
+          archive="wasm-bindgen-${version}-x86_64-unknown-linux-musl.tar.gz"
+          base="https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${version}"
+          mkdir -p "$RUNNER_TEMP/cpns-wasm-runner"
+          cd "$RUNNER_TEMP/cpns-wasm-runner"
+          curl --fail --location --retry 3 --remote-name "$base/$archive"
+          curl --fail --location --retry 3 --remote-name "$base/$archive.sha256sum"
+          checksum=$(cut -d ' ' -f1 "$archive.sha256sum")
+          printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check
+          tar -xzf "$archive" --strip-components=1
+          echo "$PWD" >> "$GITHUB_PATH"
+      - name: Run opening tests in headless Chrome on wasm32
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
+          WASM_BINDGEN_USE_BROWSER: '1'
+          WASM_BINDGEN_TEST_TIMEOUT: '60'
+        run: |
+          export CHROMEDRIVER="$(command -v chromedriver)"
+          cargo test --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test openings
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: dependency-lock
-          path: Cargo.lock
+          path: |
+            Cargo.lock
+            dependency-metadata.json
