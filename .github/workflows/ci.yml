@@ -1,7 +1,8 @@
 name: ci
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci
+  cancel-in-progress: false
+  queue: max
 jobs:
   resolve:
     runs-on: ubuntu-latest
@@ -13,18 +14,21 @@ jobs:
         persist-credentials: false
     - uses: dtolnay/rust-toolchain@stable
     - name: Resolve one fresh dependency snapshot
-      run: |-
-        cargo update
+      run: 'cargo update
+
         rustc --version > resolver.txt
+
         cargo --version >> resolver.txt
+
         date -u +%FT%TZ >> resolver.txt
-        sha256sum Cargo.lock >> resolver.txt
+
+        sha256sum Cargo.lock >> resolver.txt'
     - uses: actions/upload-artifact@v4
       with:
         name: resolved-lock
-        path: |-
-          Cargo.lock
-          resolver.txt
+        path: 'Cargo.lock
+
+          resolver.txt'
         retention-days: 7
   check:
     runs-on: ubuntu-latest
@@ -47,34 +51,57 @@ jobs:
     - run: rustc --version
     - run: cargo metadata --locked --all-features --format-version 1 > dependency-metadata.json
     - run: cargo fmt --all --check
+      id: fmt
+    - name: Retain the exact runner formatting patch
+      if: failure() && steps.fmt.outcome == 'failure'
+      run: 'cargo fmt --all
+
+        git diff --binary > "$RUNNER_TEMP/rustfmt.patch"'
+    - uses: actions/upload-artifact@v4
+      if: failure() && steps.fmt.outcome == 'failure'
+      with:
+        name: rustfmt-patch
+        path: ${{ runner.temp }}/rustfmt.patch
     - run: cargo clippy --locked --all-targets -- -D warnings
     - run: cargo test --locked
     - run: cargo test --locked --no-default-features
     - run: cargo check --locked --target wasm32-unknown-unknown
-    - run: cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test openings --test diagnostics
-        -- -D warnings
+    - run: cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test openings --test diagnostics -- -D warnings
     - name: Install the matching Wasm test runner
       shell: bash
-      run: |
-        version=$(jq -r '.packages[] | select(.name == "wasm-bindgen") | .version' dependency-metadata.json)
+      run: 'version=$(jq -r ''.packages[] | select(.name == "wasm-bindgen") | .version'' dependency-metadata.json)
+
         archive="wasm-bindgen-${version}-x86_64-unknown-linux-musl.tar.gz"
+
         base="https://github.com/wasm-bindgen/wasm-bindgen/releases/download/${version}"
+
         mkdir -p "$RUNNER_TEMP/cpns-wasm-runner"
+
         cd "$RUNNER_TEMP/cpns-wasm-runner"
+
         curl --fail --location --retry 3 --remote-name "$base/$archive"
+
         curl --fail --location --retry 3 --remote-name "$base/$archive.sha256sum"
-        checksum=$(cut -d ' ' -f1 "$archive.sha256sum")
-        printf '%s  %s\n' "$checksum" "$archive" | sha256sum --check
+
+        checksum=$(cut -d '' '' -f1 "$archive.sha256sum")
+
+        printf ''%s  %s\n'' "$checksum" "$archive" | sha256sum --check
+
         tar -xzf "$archive" --strip-components=1
+
         echo "$PWD" >> "$GITHUB_PATH"
+
+        '
     - name: Run opening tests in headless Chrome on wasm32
       env:
         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
         WASM_BINDGEN_USE_BROWSER: '1'
         WASM_BINDGEN_TEST_TIMEOUT: '60'
-      run: |
-        export CHROMEDRIVER="$(command -v chromedriver)"
+      run: 'export CHROMEDRIVER="$(command -v chromedriver)"
+
         cargo test --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test openings --test diagnostics
+
+        '
     needs:
     - resolve
   dependency-policy:
@@ -115,36 +142,41 @@ jobs:
     - uses: Swatinem/rust-cache@v2
       with:
         prefix-key: coverage
+        cache-on-failure: true
     - uses: taiki-e/install-action@v2
       with:
         tool: cargo-llvm-cov
-    - run: |-
-        rustc --version
-        cargo llvm-cov --version
+    - run: 'rustc --version
+
+        cargo llvm-cov --version'
     - name: Measure real native round trips and failure paths
-      run: cargo llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage --no-cfg-coverage-nightly
-        --ignore-filename-regex '/tests/' --json --output-path coverage.json
+      run: cargo llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage --no-cfg-coverage-nightly --ignore-filename-regex '/tests/' --json --output-path coverage.json
+    - name: Export exact line and branch locations
+      run: cargo llvm-cov report --locked --branch --ignore-filename-regex '/tests/' --lcov --output-path coverage.lcov
+    - name: Cross-check emitted line inventory independently
+      run: cargo llvm-cov report --locked --branch --ignore-filename-regex '/tests/' --text --output-path coverage.txt
     - name: Require complete line and branch coverage
-      run: python3 .github/check-coverage.py coverage.json
+      run: 'python3 .github/test-source-coverage.py
+
+        python3 .github/check-source-coverage.py coverage.lcov coverage.json coverage.txt'
     - uses: actions/upload-artifact@v4
       if: always()
       with:
         name: coverage
-        path: |-
-          coverage.json
+        path: 'coverage.json
+
+          coverage.lcov
+
+          coverage.txt
+
           Cargo.lock
-          resolver.txt
+
+          resolver.txt'
         retention-days: 7
 'on':
   push:
     branches:
-    - '**'
-    paths-ignore:
-    - docs/**
-    - AGENTS.md
-    - LICENSE
-    - LICENSE.md
-    - LICENSES/**
+    - main
   pull_request: null
   workflow_dispatch: null
 permissions:

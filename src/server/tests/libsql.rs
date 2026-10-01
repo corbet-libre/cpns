@@ -52,6 +52,7 @@ async fn malformed_imported_rows_never_become_pins() {
     let (_dir, db) = database(schema).await;
     let scope = db.community("community").unwrap();
     let store = LibsqlStore::new(&db, "community").unwrap();
+    assert_eq!(store.get("member", "absent").await.unwrap(), None);
     for (index, (digest, revision)) in [
         (Value::Text("invalid".into()), Value::Integer(1)),
         (Value::Blob(vec![0; 31]), Value::Integer(1)),
@@ -72,4 +73,31 @@ async fn malformed_imported_rows_never_become_pins() {
             .unwrap();
         assert_eq!(store.get("member", &field).await, Err(Error::Storage));
     }
+}
+
+#[tokio::test]
+async fn missing_sql_table_refuses_reads_and_writes() {
+    let schema = "CREATE TABLE unrelated (community_id TEXT PRIMARY KEY) WITHOUT ROWID";
+    let (_dir, db) = database(schema).await;
+    let store = LibsqlStore::new(&db, "community").unwrap();
+    let fingerprint = Fingerprint::from_bytes([1; 32]);
+    assert_eq!(store.get("member", "field").await, Err(Error::Storage));
+    assert_eq!(
+        store.insert("member", "field", fingerprint).await,
+        Err(Error::Storage)
+    );
+    let change = Change {
+        community: "community",
+        member: "member",
+        field: "field",
+        expected: Pin {
+            fingerprint,
+            revision: 1,
+        },
+        replacement: Fingerprint::from_bytes([2; 32]),
+    };
+    assert_eq!(
+        store.compare_exchange(AuthorizedChange::new(change)).await,
+        Err(Error::Storage)
+    );
 }
