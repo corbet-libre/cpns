@@ -66,8 +66,8 @@ Surveyed crates.io and upstream GitHub sources on 2026-09-30 before implementati
 | [wasm-bindgen-test 0.3](https://github.com/wasm-bindgen/wasm-bindgen/tree/main/crates/test) (MIT/Apache-2.0) | Selected as a Wasm-only dev dependency to execute the same opening tests in a browser. Upstream's matching prebuilt runner avoids compiling a separate test tool in CI; wasm-pack is an alternative orchestrator, unnecessary for this single test target. |
 | [crlt](https://github.com/corbet-foss/crlt) (LGPL-3.0-only WITH linking exception) | Main exposes scoped libSQL transactions, migrations and query-plan checks. Selected for the storage adapter, rather than directly depending on libsql or an ORM. |
 
-The native default `storage` feature uses `crlt` at main commit
-`6b94dacd7fa04aa8847c62c6471a1fc5c0f6c9dc`, whose own CI passed. It delegates to
+The native default `storage` feature follows `crlt` main, with its resolved
+revision recorded in Cargo.lock. It delegates to
 the official `libsql` client; cpns has no direct database-driver dependency.
 Use `--no-default-features` for device-only consumers; Wasm excludes the server
 and native database dependencies even with default features.
@@ -151,9 +151,16 @@ The optional real Turso test skips unless **both** `TURSO_URL` and `TURSO_TOKEN`
 are nonempty. Only supply a disposable test database: it applies the standalone
 schema and writes synthetic rows. Credentials are never read by library code,
 stored in this repository or configured in CI. CI retains the resolved dependency
-lockfile as an artifact; committed locks are used without re-resolution.
+lockfile as an artifact; CI resolves once and all subsequent checks use that
+exact snapshot with `--locked`.
 Never publish this crate to a registry.
 
 ## License
 
 Copyright 2026 Julian Y. Richard Corbet. Licensed under [LGPL-3.0-only](LICENSES/LGPL-3.0-only.txt) [WITH LGPL-3.0-linking-exception](LICENSES/LGPL-3.0-linking-exception.txt). See [LICENSE.md](LICENSE.md).
+
+## Continuous verification
+
+Dependency updates follow main and are tested against one CI-resolved lockfile.
+Line and branch coverage target 100%; failures remain blocking. See
+[the coverage contract](docs/COVERAGE.md) for measurement and exclusions.

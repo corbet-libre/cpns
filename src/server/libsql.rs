@@ -5,6 +5,10 @@ use crlt::{Community, Db, Value, params};
 use super::{AuthorizedChange, Error, Pin, Store, validate_key};
 use crate::Fingerprint;
 
+#[cfg(test)]
+#[path = "tests/libsql.rs"]
+mod boundary_tests;
+
 /// Include this DDL in the service's ordered crlt migration history.
 /// cpns does not reserve a global migration number or open its own connection.
 pub const SCHEMA: &str = "CREATE TABLE cpns_pins (

@@ -145,8 +145,8 @@ Native `MemoryStore` is a real implementation
 with a mutex and ordered map, shared by its clones. It is for tests, not for
 durable credentials: losing its state would reset revisions.
 
-`LibsqlStore` accepts a service-owned `crlt::Db`, pins crlt's main
-revision as a git dependency, and uses scoped transactions. No direct libSQL
+`LibsqlStore` accepts a service-owned `crlt::Db`, follows crlt's main
+branch with a reproducible locked revision, and uses scoped transactions. No direct libSQL
 dependency or raw connection is exposed by cpns. The service includes `SCHEMA`
 in its complete numbered migration history; the library does not reserve global
 migration numbers or apply a separate history that could clash with other leaves.

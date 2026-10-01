@@ -8,6 +8,10 @@ use crate::Fingerprint;
 
 type Rows = BTreeMap<(String, String), Pin>;
 
+#[cfg(test)]
+#[path = "tests/memory.rs"]
+mod boundary_tests;
+
 /// In-memory implementation with atomic operations, useful for tests.
 /// Clones share state and community scope. Restarting loses all pins: never use
 /// this adapter where issued credentials or spent tokens survive a restart.
