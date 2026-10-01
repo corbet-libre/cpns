@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Require all emitted source lines and branches from the same LLVM execution."""
 import json
+import hashlib
 import re
 from collections import Counter
 import sys
@@ -11,16 +12,47 @@ def check(lcov, raw_json, root, annotated, target='native'):
     root = Path(root).resolve()
 
     allowed = {}
+    allowed_branches = {}
     manifest = root / '.github/coverage-exclusions.json'
     for entry in json.loads(manifest.read_text()) if manifest.exists() else []:
         if entry.get('target', 'native') != target:
             continue
-        key = (entry['file'], entry['line'])
-        if not entry['reason'] or not entry['evidence'] or key in allowed:
-            raise ValueError('Exclusion requires unique source, reason and evidence')
-        if (root / entry['file']).read_text().splitlines()[entry['line'] - 1].strip() != entry['source']:
+        if not entry.get('reason') or not entry.get('evidence'):
+            raise ValueError('Exclusion requires reason and evidence')
+        path = (root / entry['file']).resolve()
+        relative = path.relative_to(root)
+        if relative.suffix != '.rs' or 'tests' in relative.parts or 'target' in relative.parts:
+            raise ValueError('Exclusion must identify production Rust source')
+        line = entry['line']
+        if not isinstance(line, int) or isinstance(line, bool) or line <= 0:
+            raise ValueError('Invalid excluded source line')
+        if path.read_text().splitlines()[line - 1].strip() != entry['source']:
             raise ValueError('Excluded source moved or changed; review it')
-        allowed[key] = entry
+        evidence_sources = entry.get('evidence_sources', {})
+        if not isinstance(evidence_sources, dict):
+            raise ValueError('Invalid evidence source inventory')
+        for name, digest in evidence_sources.items():
+            dependency = (root / name).resolve()
+            dependency.relative_to(root)
+            if hashlib.sha256(dependency.read_bytes()).hexdigest() != digest:
+                raise ValueError('Exclusion evidence changed; review it')
+        key = (str(relative), line)
+        if 'branch' in entry:
+            branch = entry['branch']
+            if not isinstance(branch, dict) or set(branch) != {'block', 'id'}:
+                raise ValueError('Exclusion requires one exact branch arm')
+            if any(not isinstance(value, int) or isinstance(value, bool) or value < 0 for value in branch.values()):
+                raise ValueError('Invalid excluded branch coordinate')
+            if str(relative) not in evidence_sources:
+                raise ValueError('Branch exception requires complete source hash')
+            key += (branch['block'], branch['id'])
+            if key in allowed_branches:
+                raise ValueError('Duplicate branch exclusion')
+            allowed_branches[key] = entry
+        else:
+            if key in allowed:
+                raise ValueError('Duplicate line exclusion')
+            allowed[key] = entry
 
     def source_path(value):
         path = Path(value).resolve().relative_to(root)
@@ -138,9 +170,16 @@ def check(lcov, raw_json, root, annotated, target='native'):
         raise ValueError('Excluded line exercised; remove its exception')
     if any((path, line) in allowed for path, line, _, _ in branches):
         raise ValueError('Line-only exception cannot contain a branch')
+    if not allowed_branches.keys() <= branches.keys():
+        raise ValueError('Branch exclusion absent from actual LLVM evidence')
+    if any(branches[key] != 0 for key in allowed_branches):
+        raise ValueError('Excluded branch exercised; remove its exception')
     for key in allowed:
         print('Excluded line:', key, allowed[key]['reason'])
         del lines[key]
+    for key in allowed_branches:
+        print('Excluded branch:', key, allowed_branches[key]['reason'])
+        del branches[key]
     missing_lines = [key for key, count in lines.items() if count == 0]
     missing_branches = [key for key, count in branches.items() if count == 0]
     print(f'lines: {len(lines) - len(missing_lines)}/{len(lines)}')
@@ -152,5 +191,5 @@ def check(lcov, raw_json, root, annotated, target='native'):
 if __name__ == '__main__':
     try:
         check(Path(sys.argv[1]).read_text(), json.loads(Path(sys.argv[2]).read_text()), Path.cwd(), Path(sys.argv[3]).read_text(), sys.argv[4] if len(sys.argv) > 4 else 'native')
-    except (ValueError, KeyError, TypeError, OSError) as error:
+    except (ValueError, KeyError, TypeError, OSError, IndexError) as error:
         sys.exit(f'Coverage gate: {error}')

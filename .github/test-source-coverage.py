@@ -1,9 +1,10 @@
 """Exercise the actual source gate against LLVM-format acceptance/refusal cases."""
 import copy
-import contextlib
-import io
+import hashlib
 import json
 import tempfile
+import contextlib
+import io
 import importlib.util
 import unittest
 from pathlib import Path
@@ -83,49 +84,71 @@ class GateTests(unittest.TestCase):
                 gate.check(LCOV, RAW, ROOT, text)
 
 
-    def test_exception_is_exact_unexecuted_and_branch_free(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'src').mkdir()
-            (root / '.github').mkdir()
-            (root / 'src/lib.rs').write_text('source\ndefensive mapper\n')
-            entry = {'file': 'src/lib.rs', 'line': 2, 'source': 'defensive mapper',
-                     'reason': 'prevalidated input', 'evidence': 'constructor predicates'}
-            manifest = root / '.github/coverage-exclusions.json'
-            def run(entries, covered=False):
-                manifest.write_text(json.dumps(entries))
-                raw = copy.deepcopy(RAW)
-                raw['data'][0]['files'][0]['filename'] = str(root / 'src/lib.rs')
-                lcov = LCOV.replace(str(ROOT), str(root))
-                text = TEXT.replace(str(ROOT), str(root))
-                if not covered:
-                    raw['data'][0]['files'][0]['summary']['lines']['covered'] = 1
-                    lcov = lcov.replace('DA:2,1', 'DA:2,0').replace('LH:2', 'LH:1')
-                    text = text.replace('2| 1|', '2| 0|')
-                gate.check(lcov, raw, root, text)
-            run([entry])
-            with self.assertRaises(ValueError): run([entry], covered=True)
-            for entries in [[], [entry, entry], [dict(entry, source='changed')],
-                            [dict(entry, line=3)], [dict(entry, reason='')],
-                            [dict(entry, evidence='')], [dict(entry, target='wasm')]]:
-                with self.subTest(entries=entries), self.assertRaises((ValueError, IndexError)):
-                    run(entries)
+class ExceptionTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.root = Path(self.directory.name)
+        (self.root / 'src').mkdir()
+        (self.root / '.github').mkdir()
+        self.source = self.root / 'src/lib.rs'
+        self.source.write_text('predicate\nmapper\n')
+        self.manifest = self.root / '.github/coverage-exclusions.json'
+        self.lcov = LCOV.replace(str(ROOT), str(self.root)).replace('BRDA:1,0,1,1', 'BRDA:1,0,1,0').replace('BRH:2', 'BRH:1')
+        self.raw = json.loads(json.dumps(RAW).replace(str(ROOT), str(self.root)))
+        self.raw['data'][0]['files'][0]['branches'][0][5] = 0
+        self.raw['data'][0]['files'][0]['summary']['branches']['covered'] = 1
+        self.text = TEXT.replace(str(ROOT), str(self.root))
+        self.branch = {'file': 'src/lib.rs', 'line': 1, 'source': 'predicate',
+                       'branch': {'block': 0, 'id': 1}, 'reason': 'Fixture invariant',
+                       'evidence': 'Fixture evidence only',
+                       'evidence_sources': {'src/lib.rs': hashlib.sha256(self.source.read_bytes()).hexdigest()}}
 
-    def test_exception_cannot_hide_a_source_branch(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / 'src').mkdir()
-            (root / '.github').mkdir()
-            (root / 'src/lib.rs').write_text('source\nsource\n')
-            entry = {'file': 'src/lib.rs', 'line': 1, 'source': 'source',
-                     'reason': 'must refuse', 'evidence': 'branch counter present'}
-            (root / '.github/coverage-exclusions.json').write_text(json.dumps([entry]))
-            raw = copy.deepcopy(RAW)
-            raw['data'][0]['files'][0]['filename'] = str(root / 'src/lib.rs')
-            raw['data'][0]['files'][0]['summary']['lines']['covered'] = 1
-            lcov = LCOV.replace(str(ROOT), str(root)).replace('DA:1,3', 'DA:1,0').replace('LH:2', 'LH:1')
-            text = TEXT.replace(str(ROOT), str(root)).replace('1| 3|', '1| 0|')
-            with self.assertRaises(ValueError): gate.check(lcov, raw, root, text)
+    def check(self, entries):
+        self.manifest.write_text(json.dumps(entries))
+        gate.check(self.lcov, self.raw, self.root, self.text)
+
+    def test_exact_unreachable_branch_keeps_the_other_arm_and_all_inventories(self):
+        self.check([self.branch])
+        self.lcov = self.lcov.replace('BRDA:1,0,0,2\n', '')
+        with self.assertRaises(ValueError):
+            self.check([self.branch])
+
+    def test_refuses_executed_missing_duplicate_or_unpinned_branch(self):
+        for change in [
+            {'branch': {'block': 0, 'id': 0}},
+            {'branch': {'block': 1, 'id': 1}},
+            {'branch': {'block': 0, 'id': -1}},
+            {'branch': {'block': 0, 'id': True}},
+            {'branch': {'block': 0}},
+            {'evidence_sources': {}}, {'reason': ''}, {'evidence': ''},
+            {'source': 'changed'}, {'line': 0}, {'line': True},
+        ]:
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                self.check([self.branch | change])
+        with self.assertRaises(ValueError):
+            self.check([self.branch, self.branch])
+
+    def test_invariant_source_change_elsewhere_invalidates_exception(self):
+        self.source.write_text('predicate\nchanged earlier validation\n')
+        with self.assertRaises(ValueError):
+            self.check([self.branch])
+
+    def test_wrong_target_cannot_hide_a_missing_arm(self):
+        with self.assertRaises(ValueError):
+            self.check([self.branch | {'target': 'wasm'}])
+
+    def test_line_exception_cannot_hide_a_branch_or_executed_line(self):
+        line = {key: value for key, value in self.branch.items() if key != 'branch'}
+        with self.assertRaises(ValueError):
+            self.check([line])
+        self.lcov = self.lcov.replace('DA:2,1', 'DA:2,0').replace('LH:2', 'LH:1')
+        self.raw['data'][0]['files'][0]['summary']['lines']['covered'] = 1
+        self.text = self.text.replace('2| 1|', '2| 0|')
+        self.check([self.branch, line | {'line': 2, 'source': 'mapper'}])
+        self.text = self.text.replace(' 2| 0|source\n', '')
+        with self.assertRaises(ValueError):
+            self.check([self.branch, line | {'line': 2, 'source': 'mapper'}])
 
 
 if __name__ == '__main__':

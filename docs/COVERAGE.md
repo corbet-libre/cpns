@@ -41,7 +41,7 @@ Actual browser/device execution remains separate from native coverage.
 One native line is excluded: `src/server/libsql.rs:45`, the closure body mapping
 `Db::community` errors. `LibsqlStore::new` has already called `validate_key`, which
 rejects empty strings, NUL and keys longer than1024 bytes. Current `crlt`
-`6ca3bd1035fcf17c2c88cdae3ed913da49740252` `src/lib.rs:185–195` rejects only empty
+`422c05565cdc8afbf19cedaec2bcd59d64070126` `src/lib.rs:185–195` rejects only empty
 strings and NUL. The constructor clones its connection capability and performs
 no I/O. Every error input is therefore refused before the defensive closure.
 The production mapping remains unchanged for future upstream errors.
@@ -55,3 +55,12 @@ An upstream constructor change requires re-review. No other storage error is
 excluded: real libSQL failures, malformed imported rows and an incompatible
 required-column schema exercise the reachable refusal paths. The last pre-fix
 run retained333/335 lines and32/32 branches, not full coverage.
+
+
+Internal planner tests now live in `src/server/tests/plans.rs`, with unchanged
+bodies and private module access. Earlier source totals included that inline test
+body; new reports measure production code only. The proposed exception now pins
+both the complete constructor source and its preceding validator source by SHA256.
+The shared13 regression methods refuse stale hashes, malformed/missing reports,
+executed exclusions and incorrect branch coordinates. Only the one line exclusion
+above is configured; independent acceptance remains pending.
