@@ -1,0 +1,10 @@
+[
+  {
+    "file": "src/server/libsql.rs",
+    "line": 45,
+    "source": ".map_err(|_| Error::Storage)?,",
+    "target": "native",
+    "reason": "The preceding cpns validate_key rejects empty or NUL-containing community keys before Db::community. The current crlt method has only those same two error predicates and no I/O, so this defensive mapper cannot execute.",
+    "evidence": "docs/COVERAGE.md#unreachable-community-error-mapping; current crlt main 6ca3bd1035fcf17c2c88cdae3ed913da49740252 src/lib.rs185-195 and cpns src/server/mod.rs262-268. No branch is excluded. Re-review if the upstream community constructor gains another failure mode."
+  }
+]

@@ -101,3 +101,22 @@ async fn missing_sql_table_refuses_reads_and_writes() {
         Err(Error::Storage)
     );
 }
+
+#[tokio::test]
+async fn incompatible_import_schema_refuses_insert_without_creating_a_pin() {
+    // A required column in an incompatible imported schema must fail the actual INSERT.
+    let schema = SCHEMA.replace(
+        "revision INTEGER NOT NULL",
+        "import_required TEXT NOT NULL, revision INTEGER NOT NULL",
+    );
+    let (_dir, db) = database(&schema).await;
+    let store = LibsqlStore::new(&db, "community").unwrap();
+    assert_eq!(store.get("member", "field").await.unwrap(), None);
+    assert_eq!(
+        store
+            .insert("member", "field", Fingerprint::from_bytes([1; 32]))
+            .await,
+        Err(Error::Storage)
+    );
+    assert_eq!(store.get("member", "field").await.unwrap(), None);
+}

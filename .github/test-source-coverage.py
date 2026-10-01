@@ -2,6 +2,8 @@
 import copy
 import contextlib
 import io
+import json
+import tempfile
 import importlib.util
 import unittest
 from pathlib import Path
@@ -79,6 +81,51 @@ class GateTests(unittest.TestCase):
         for text in ['', TEXT + TEXT, TEXT.replace(' 2| 1|source\n', ''), TEXT.replace('2| 1|', '2| 0|')]:
             with self.subTest(text=text), self.assertRaises(ValueError):
                 gate.check(LCOV, RAW, ROOT, text)
+
+
+    def test_exception_is_exact_unexecuted_and_branch_free(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'src').mkdir()
+            (root / '.github').mkdir()
+            (root / 'src/lib.rs').write_text('source\ndefensive mapper\n')
+            entry = {'file': 'src/lib.rs', 'line': 2, 'source': 'defensive mapper',
+                     'reason': 'prevalidated input', 'evidence': 'constructor predicates'}
+            manifest = root / '.github/coverage-exclusions.json'
+            def run(entries, covered=False):
+                manifest.write_text(json.dumps(entries))
+                raw = copy.deepcopy(RAW)
+                raw['data'][0]['files'][0]['filename'] = str(root / 'src/lib.rs')
+                lcov = LCOV.replace(str(ROOT), str(root))
+                text = TEXT.replace(str(ROOT), str(root))
+                if not covered:
+                    raw['data'][0]['files'][0]['summary']['lines']['covered'] = 1
+                    lcov = lcov.replace('DA:2,1', 'DA:2,0').replace('LH:2', 'LH:1')
+                    text = text.replace('2| 1|', '2| 0|')
+                gate.check(lcov, raw, root, text)
+            run([entry])
+            with self.assertRaises(ValueError): run([entry], covered=True)
+            for entries in [[], [entry, entry], [dict(entry, source='changed')],
+                            [dict(entry, line=3)], [dict(entry, reason='')],
+                            [dict(entry, evidence='')], [dict(entry, target='wasm')]]:
+                with self.subTest(entries=entries), self.assertRaises((ValueError, IndexError)):
+                    run(entries)
+
+    def test_exception_cannot_hide_a_source_branch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'src').mkdir()
+            (root / '.github').mkdir()
+            (root / 'src/lib.rs').write_text('source\nsource\n')
+            entry = {'file': 'src/lib.rs', 'line': 1, 'source': 'source',
+                     'reason': 'must refuse', 'evidence': 'branch counter present'}
+            (root / '.github/coverage-exclusions.json').write_text(json.dumps([entry]))
+            raw = copy.deepcopy(RAW)
+            raw['data'][0]['files'][0]['filename'] = str(root / 'src/lib.rs')
+            raw['data'][0]['files'][0]['summary']['lines']['covered'] = 1
+            lcov = LCOV.replace(str(ROOT), str(root)).replace('DA:1,3', 'DA:1,0').replace('LH:2', 'LH:1')
+            text = TEXT.replace(str(ROOT), str(root)).replace('1| 3|', '1| 0|')
+            with self.assertRaises(ValueError): gate.check(lcov, raw, root, text)
 
 
 if __name__ == '__main__':

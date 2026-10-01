@@ -7,8 +7,20 @@ import sys
 from pathlib import Path
 
 
-def check(lcov, raw_json, root, annotated):
+def check(lcov, raw_json, root, annotated, target='native'):
     root = Path(root).resolve()
+
+    allowed = {}
+    manifest = root / '.github/coverage-exclusions.json'
+    for entry in json.loads(manifest.read_text()) if manifest.exists() else []:
+        if entry.get('target', 'native') != target:
+            continue
+        key = (entry['file'], entry['line'])
+        if not entry['reason'] or not entry['evidence'] or key in allowed:
+            raise ValueError('Exclusion requires unique source, reason and evidence')
+        if (root / entry['file']).read_text().splitlines()[entry['line'] - 1].strip() != entry['source']:
+            raise ValueError('Excluded source moved or changed; review it')
+        allowed[key] = entry
 
     def source_path(value):
         path = Path(value).resolve().relative_to(root)
@@ -98,8 +110,8 @@ def check(lcov, raw_json, root, annotated):
     # and therefore cannot detect a deleted DA record reliably.
     annotated_lines, annotated_files = {}, set()
     current = None
-    # LLVM omits the heading for a single source. Bind that format only when
-    # both other reports agree on exactly one production source.
+    # Upstream omits the filename heading for a single source file. Only that
+    # unambiguous inventory may bind a heading-free annotated report.
     has_heading = any(row.endswith('.rs:') and row.startswith('/') for row in annotated.splitlines())
     if len(files) == 1 and not has_heading:
         current = next(iter(files))
@@ -120,6 +132,15 @@ def check(lcov, raw_json, root, annotated):
         raise ValueError('Incomplete emitted line inventory')
     if any((lines[key] > 0) != hit for key, hit in annotated_lines.items()):
         raise ValueError('Inconsistent emitted line coverage')
+    if not allowed.keys() <= lines.keys():
+        raise ValueError('Exclusion absent from actual LLVM evidence')
+    if any(lines[key] != 0 for key in allowed):
+        raise ValueError('Excluded line exercised; remove its exception')
+    if any((path, line) in allowed for path, line, _, _ in branches):
+        raise ValueError('Line-only exception cannot contain a branch')
+    for key in allowed:
+        print('Excluded line:', key, allowed[key]['reason'])
+        del lines[key]
     missing_lines = [key for key, count in lines.items() if count == 0]
     missing_branches = [key for key, count in branches.items() if count == 0]
     print(f'lines: {len(lines) - len(missing_lines)}/{len(lines)}')
@@ -130,6 +151,6 @@ def check(lcov, raw_json, root, annotated):
 
 if __name__ == '__main__':
     try:
-        check(Path(sys.argv[1]).read_text(), json.loads(Path(sys.argv[2]).read_text()), Path.cwd(), Path(sys.argv[3]).read_text())
+        check(Path(sys.argv[1]).read_text(), json.loads(Path(sys.argv[2]).read_text()), Path.cwd(), Path(sys.argv[3]).read_text(), sys.argv[4] if len(sys.argv) > 4 else 'native')
     except (ValueError, KeyError, TypeError, OSError) as error:
         sys.exit(f'Coverage gate: {error}')
