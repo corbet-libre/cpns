@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.88"
 description = "Pins: sealed fingerprints of restricted profile fields"
 license = "LGPL-3.0-only WITH LGPL-3.0-linking-exception"
-repository = "https://github.com/corbet-foss/cpns"
+repository = "https://git.corbet.ch/corbet-foss/cpns.git"
 readme = "README.md"
 publish = false
 include = ["Cargo.toml", "src/**", "docs/**", "README.md", "LICENSE", "LICENSE.md", "LICENSES/LGPL-3.0-only.txt", "LICENSES/LGPL-3.0-linking-exception.txt", "LICENSES/GPL-3.0-only.txt"]
@@ -22,7 +22,7 @@ wasm = ["dep:getrandom", "getrandom/wasm_js"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 getrandom = "0.4"
-crlt = { git = "https://github.com/corbet-foss/crlt", branch = "main", optional = true }
+crlt = { git = "https://git.corbet.ch/corbet-foss/crlt.git", branch = "v01", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.4", optional = true }
