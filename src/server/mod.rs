@@ -243,19 +243,29 @@ impl<S: Store, V: ChangeTokenVerifier> Pins<S, V> {
             expected,
             replacement,
         };
+        let authorized = self.authorize(change, token).await?;
+        self.store.compare_exchange(authorized).await
+    }
+
+    async fn authorize<'a>(
+        &self,
+        change: Change<'a>,
+        token: &V::Token,
+    ) -> Result<AuthorizedChange<'a>, Error> {
         change.next_pin()?;
-        match self.store.get(member, field).await? {
+        if change.community != self.store.community() {
+            return Err(Error::Conflict);
+        }
+        match self.store.get(change.member, change.field).await? {
             None => return Err(Error::NotPinned),
-            Some(current) if current != expected => return Err(Error::Conflict),
+            Some(current) if current != change.expected => return Err(Error::Conflict),
             Some(_) => {}
         }
         self.verifier
             .verify_spent(&change, token)
             .await
             .map_err(|_| Error::TokenRejected)?;
-        self.store
-            .compare_exchange(AuthorizedChange::new(change))
-            .await
+        Ok(AuthorizedChange::new(change))
     }
 }
 

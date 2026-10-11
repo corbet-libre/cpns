@@ -48,6 +48,8 @@ impl LibsqlStore {
     }
 }
 
+mod current;
+
 impl Store for LibsqlStore {
     fn community(&self) -> &str {
         &self.community
@@ -110,6 +112,23 @@ impl Store for LibsqlStore {
     }
 
     async fn compare_exchange(&self, authorized: AuthorizedChange<'_>) -> Result<Pin, Error> {
+        self.compare_exchange_current(authorized, || async { Ok(()) }, || Ok(()))
+            .await
+    }
+}
+
+impl LibsqlStore {
+    async fn compare_exchange_current<F, Fut, C>(
+        &self,
+        authorized: AuthorizedChange<'_>,
+        current: F,
+        cut: C,
+    ) -> Result<Pin, Error>
+    where
+        F: FnOnce() -> Fut,
+        Fut: std::future::Future<Output = Result<(), Error>>,
+        C: Fn() -> Result<(), Error>,
+    {
         let change = authorized.change();
         let next = change.next_pin()?;
         if change.community != self.community {
@@ -134,7 +153,12 @@ impl Store for LibsqlStore {
             tx.rollback().await.map_err(|_| Error::Storage)?;
             return Err(Error::Conflict);
         }
+        current().await?;
+        cut()?;
         tx.commit().await.map_err(|_| Error::Storage)?;
+        // A late return may already be committed. Never report rollback or
+        // suggest that another spend is necessary; callers reconcile the pin.
+        cut().map_err(|_| Error::Storage)?;
         Ok(next)
     }
 }

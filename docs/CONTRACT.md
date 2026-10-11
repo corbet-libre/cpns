@@ -185,6 +185,19 @@ or a service directly rewriting its DB is outside this library's trust boundary.
 
 ## Verification and remaining integration
 
+The libSQL-specific `Pins::change_current` additionally holds the actual immediate
+write transaction across an application's read-only current-authority checks.
+It applies the exact revision/fingerprint CAS, checks current owners under that
+lock, checks the caller's live exclusive deadline at the commit cut, and checks
+again after return. A refused or cancelled pre-commit check rolls back the pin;
+a failed post-commit check returns the uncertain `Error::Storage` and requires
+reading the current pin. The samples bracket the commit await; they do not
+guarantee physical storage completion before authority expiry.
+The caller retains its member lease and uses genuine owners against the same
+database, without nested writes. Separate pooled reads require another available
+connection; a one-connection pool refuses at its configured CRLT deadline. This
+hook does not establish membership or verify native accounting proofs itself.
+
 CI runs formatting, strict Clippy, native tests (default and without storage),
 checks the device crate for `wasm32-unknown-unknown` without JavaScript support,
 and runs the opening suite on that target in headless Chrome with `wasm` enabled.
