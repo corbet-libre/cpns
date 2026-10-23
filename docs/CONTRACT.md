@@ -210,7 +210,8 @@ handles, persistence, migration idempotence, corruption rejection and scoping.
 Turso tests require both URL and token in the environment and otherwise skip;
 no CI secrets are used. The optional remote test requires a disposable DB.
 
-Open integration: implement and security-review the cblc verifier against this
+Open integration: security-review the cblc verifier (implemented as
+`PinSpendVerifier` in cblc `src/pins.rs`) against this
 binding/retry contract, including the interaction of member/field binding with
 cblc unlinkability; choose canonical encodings and authenticated v2 negotiation
 in cshm/cgrd; integrate device salt

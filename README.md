@@ -72,10 +72,11 @@ the official `libsql` client; cpns has no direct database-driver dependency.
 Use `--no-default-features` for device-only consumers; Wasm excludes the server
 and native database dependencies even with default features.
 
-`corbet-foss/cblc` does not exist; the architectural home
-[`corbet-libs/cblc`](https://github.com/corbet-libs/cblc) is still a placeholder
-without a spend-verification API. Integration uses `ChangeTokenVerifier`,
-with no dependency on a scaffold and no local cryptographic token protocol.
+`cblc` ([`corbet-libs/cblc`](https://git.corbet.ch/corbet-libs/cblc)) implements
+`ChangeTokenVerifier` (`PinSpendVerifier` and `VerifiedPinChange`, `src/pins.rs`)
+over its account ledger, which verifies a completed spend. Integration uses
+`ChangeTokenVerifier`; cpns has no dependency on cblc and no local cryptographic
+token protocol.
 
 ## Server API
 
@@ -116,8 +117,9 @@ assert_eq!(updated.revision, current.revision + 1);
 The verifier must authenticate a **completed spend**, for the cpns purpose,
 bound to community, member, field, expected digest **and revision**, and new
 digest. Verifying a signature on an unspent or unbound token is insufficient.
-No permissive production verifier is supplied. Until the cblc adapter exists,
-production changes must remain disabled. Initial creation is insert-only and
+No permissive production verifier is supplied; the cblc adapter above is the
+production verifier, and its security review against this contract remains open
+([CONTRACT](docs/CONTRACT.md)). Initial creation is insert-only and
 requires caller authentication and schema authorization.
 
 The revision check prevents concurrent writes and replay even if an old digest
