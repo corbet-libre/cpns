@@ -131,7 +131,7 @@ database restoration boundaries.
 ## Verification
 
 GitHub Actions runs formatting, strict Clippy, real tests and a Wasm target check
-on current stable Rust. Do not run Cargo on the workstation. Opening tests cover
+on current stable Rust. Opening tests cover
 independent SHA-256 vectors, invalid salts, wrong openings, framing ambiguity,
 binary/Unicode/empty values, freshly salted reversions, v2 context substitution
 and version separation. The same storage

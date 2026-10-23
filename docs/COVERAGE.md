@@ -9,7 +9,7 @@ The coverage job executes real tests with cargo-llvm-cov and retains the raw JSO
 even when the gate fails. The checker compares integer covered/total counts for
 both metrics; rounded percentages cannot pass. An empty report cannot pass.
 The report excludes integration-test harness files under tests/, not production
-code. The sole proposed defensive-line exclusion below requires manager review.
+code. The sole proposed defensive-line exclusion below requires independent review.
 
 A failing gate is missing evidence, not permission to lower the threshold or
 change domain behavior. Add meaningful failure and round-trip tests. Document
@@ -50,7 +50,7 @@ The exception is limited to that exact source line and native target. It cannot
 exclude branches, move to changed source, omit an actual report location or
 remain enabled once the line executes. JSON, LCOV and annotated reports must
 agree on complete inventories before applying it. The committed manifest gives
-the proof and dependency evidence; this exception remains subject to Opus review.
+the proof and dependency evidence; this exception remains subject to independent review.
 An upstream constructor change requires re-review. No other storage error is
 excluded: real libSQL failures, malformed imported rows and an incompatible
 required-column schema exercise the reachable refusal paths. The last pre-fix
