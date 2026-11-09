@@ -1,9 +1,7 @@
 //! The same contract against the real memory and crlt/libSQL adapters.
 #![cfg(not(target_arch = "wasm32"))]
 
-mod common;
-
-use common::{SpentLedger, sealed};
+use crate::common::{SpentLedger, sealed};
 use cpns::server::{
     Change, ChangeTokenVerifier, Error, MemoryStore, Pin, Pins, Store, TokenRejected,
 };

@@ -12,7 +12,7 @@ cargo clippy --locked --all-targets -- -D warnings
 cargo test --locked
 cargo test --locked --no-default-features
 cargo check --locked --target wasm32-unknown-unknown
-cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test openings --test diagnostics -- -D warnings
+cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test it -- -D warnings
 
 version=$(jq -r '.packages[] | select(.name == "wasm-bindgen") | .version' dependency-metadata.json)
 archive="wasm-bindgen-${version}-x86_64-unknown-linux-musl.tar.gz"
@@ -31,7 +31,7 @@ export CHROMEDRIVER="$(command -v chromedriver)"
 export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner
 export WASM_BINDGEN_USE_BROWSER='1'
 export WASM_BINDGEN_TEST_TIMEOUT='60'
-cargo test --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test openings --test diagnostics
+cargo test --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test it
 
 rustup run nightly rustc --version
 NIGHTLY_RUSTC="$(rustup which --toolchain nightly rustc)"

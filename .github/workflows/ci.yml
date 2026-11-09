@@ -68,7 +68,7 @@ jobs:
     - run: cargo test --locked
     - run: cargo test --locked --no-default-features
     - run: cargo check --locked --target wasm32-unknown-unknown
-    - run: cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test openings --test diagnostics -- -D warnings
+    - run: cargo clippy --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test it -- -D warnings
     - name: Install the matching Wasm test runner
       shell: bash
       run: 'version=$(jq -r ''.packages[] | select(.name == "wasm-bindgen") | .version'' dependency-metadata.json)
@@ -101,7 +101,7 @@ jobs:
         WASM_BINDGEN_TEST_TIMEOUT: '60'
       run: 'export CHROMEDRIVER="$(command -v chromedriver)"
 
-        cargo test --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test openings --test diagnostics
+        cargo test --locked --target wasm32-unknown-unknown --no-default-features --features wasm --test it
 
         '
     needs:

@@ -12,9 +12,9 @@ Rust (`#![forbid(unsafe_code)]`, `src/lib.rs:2`).
 - `clippy -p cpns --all-targets -- -D warnings`
 - `check -p cpns --target wasm32-unknown-unknown`
 - `clippy -p cpns --target wasm32-unknown-unknown --no-default-features
-  --features wasm --test openings --test diagnostics -- -D warnings`
+  --features wasm --test it -- -D warnings`
 - wasm exec: `test -p cpns --target wasm32-unknown-unknown
-  --no-default-features --features wasm --test openings --test diagnostics` with
+  --no-default-features --features wasm --test it` with
   `CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner`
   (openings 10 + diagnostics 1, headless Chrome, exit 0)
 - CI-only (Crow `.ci/verify.sh`): nightly `llvm-cov` 100% line+branch gate
